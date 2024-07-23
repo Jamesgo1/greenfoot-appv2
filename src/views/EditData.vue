@@ -4,12 +4,20 @@ import ThePageHero from "@/components/ui-components/ThePageHero.vue";
 export default {
   data() {
   },
-  computed: {},
+  computed: {
+    title: null,
+
+  },
   watch: {},
-  methods: {},
+  methods: {
+    somethingToTheData() {
+      return this.myTreeData
+    }
+  },
   mounted() {
   },
   name: 'HomePage',
+  props: ["myTreeData"],
   components: {
     ThePageHero
   }
@@ -17,13 +25,9 @@ export default {
 </script>
 
 <template>
-  <ThePageHero title="Home Page" subtitle="This is the home page"
-            description="Some info welcoming people to the site!"></ThePageHero>
-
+  <ThePageHero title="Some title" subtitle="About GreenFoot" description="More detail about the site"/>
+  {{myTreeData}}
   <!--  <h1>{{ pageTitle }}</h1>-->
   <!--  <h1>{{ info }}</h1>-->
 
 </template>
-
-
-

@@ -1,5 +1,5 @@
 <script>
-import PageHero from "@/components/PageHero";
+import ThePageHero from "@/components/ui-components/ThePageHero.vue";
 
 export default {
   data() {
@@ -12,13 +12,13 @@ export default {
   },
   name: 'HomePage',
   components: {
-    PageHero
+    ThePageHero
   }
 }
 </script>
 
 <template>
-  <PageHero title="About page" subtitle="About GreenFoot" description="More detail about the site"/>
+  <ThePageHero title="About page" subtitle="About GreenFoot" description="More detail about the site"/>
   <!--  <h1>{{ pageTitle }}</h1>-->
   <!--  <h1>{{ info }}</h1>-->
 
