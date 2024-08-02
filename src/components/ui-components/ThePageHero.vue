@@ -15,7 +15,7 @@ export default {
 </script>
 
 <template>
-  <section class="hero is-background-success has-text-centered mx-auto">
+  <section class="hero is-small is-background-success has-text-centered mx-auto">
     <div class="hero-body">
       <div class="is-centered">
         <p class="title has-text-white">{{title}}</p>

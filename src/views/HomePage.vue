@@ -3,6 +3,9 @@ import ThePageHero from "@/components/ui-components/ThePageHero.vue";
 
 export default {
   data() {
+    return {
+
+    }
   },
   computed: {},
   watch: {},

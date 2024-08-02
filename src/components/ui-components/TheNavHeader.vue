@@ -4,6 +4,9 @@ export default {
   data() {
     return {
       isAuthenticated: this.$auth0.isAuthenticated,
+      navBurgerActive: false,
+      navBurgerClass: "navbar-burger",
+      navMenuClass: "navbar-menu"
     }
   },
   computed: {
@@ -13,6 +16,7 @@ export default {
   },
   watch: {},
   methods: {
+
     handleLogin() {
       this.$auth0.loginWithRedirect({
         appState: {
@@ -37,12 +41,22 @@ export default {
         },
       });
     },
-    getNavClass(routeName){
+    getNavClass(routeName) {
       let navClass = "navbar-item"
-      if(this.currentRouteName === routeName){
+      if (this.currentRouteName === routeName) {
         navClass = navClass + " is-selected"
       }
       return navClass
+    },
+    toggleNavBurgerActivity() {
+      if (this.navBurgerActive) {
+        this.navBurgerClass = "navbar-burger"
+        this.navMenuClass = "navbar-menu"
+      } else {
+        this.navBurgerClass = this.navBurgerClass + " is-active"
+        this.navMenuClass = this.navMenuClass + " is-active"
+      }
+      this.navBurgerActive = !this.navBurgerActive;
     }
   },
   mounted() {
@@ -86,8 +100,8 @@ export default {
           </g>
         </svg>
       </router-link>
-
-      <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarBasicExample">
+      <a role="button" aria-label="menu" aria-expanded="false" data-target="navbarBasicExample"
+         @click="toggleNavBurgerActivity" :class="navBurgerClass">
         <span aria-hidden="true"></span>
         <span aria-hidden="true"></span>
         <span aria-hidden="true"></span>
@@ -95,19 +109,23 @@ export default {
       </a>
     </div>
 
-    <div id="navbarBasicExample" class="navbar-menu">
+    <div id="navbarBasicExample" :class="navMenuClass">
       <div class="navbar-start">
-        <router-link :class="getNavClass('Home')" to="/">Home</router-link>
+        <router-link @click="toggleNavBurgerActivity" :class="getNavClass('Home')" to="/">Home</router-link>
 
-        <router-link :class="getNavClass('Explore')" to="/explore">Explore</router-link>
-
+        <router-link @click="toggleNavBurgerActivity" :class="getNavClass('Explore')" to="/explore">Explore
+        </router-link>
+        <template v-if="isAuthenticated">
+          <router-link @click="toggleNavBurgerActivity" :class="getNavClass('Profile')" to="/profile">Profile
+          </router-link>
+        </template>
         <div class="navbar-item has-dropdown is-hoverable">
           <a class="navbar-link">
             More
           </a>
 
           <div class="navbar-dropdown">
-            <router-link :class="getNavClass('About')" to="/about">About</router-link>
+            <router-link @click="toggleNavBurgerActivity" :class="getNavClass('About')" to="/about">About</router-link>
             <a class="navbar-item">
               Jobs
             </a>
