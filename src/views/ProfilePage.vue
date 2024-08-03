@@ -16,7 +16,11 @@ export default {
       },
       tcCheckBox: {"edit": false, "output": "", "input_error": ""},
       inputErrors: 0,
-      nicknameAvailable: false
+      nicknameAvailable: null,
+      showNickNameTaken: false,
+      nicknameError: "Sorry, your nickname is already taken, please choose a different one and submit again",
+      userDetailsParams: {},
+      addUserResponse: null
     }
 
   },
@@ -24,7 +28,7 @@ export default {
     hasDBDetails: function () {
       return this.info.length >= 1;
     },
-    latestUserDetails: function(){
+    latestUserDetails: function () {
       if (this.hasDBDetails) {
         return this.info[0];
       }
@@ -51,17 +55,6 @@ export default {
       }
       postParams["email_verified"] = email_verified;
       return postParams;
-    },
-
-    postUserDetails(userPostParams) {
-      axios
-          .post(`${process.env.VUE_APP_API_SERVER_URL}/add-user/`, userPostParams)
-          .then(response => (this.info = response.data))
-          .catch(error => {
-            console.log(error);
-            this.error = true;
-          })
-          .finally(() => this.loading = false)
     },
     doDisplayName(name) {
       const includeAsField = Object.keys(this.form).includes(name);
@@ -90,18 +83,16 @@ export default {
     removeTCError() {
       this.tcCheckBox.input_error = "";
     },
-    checkNicknameAvailable(nickname) {
-      // const nickname = this.form.nickname.output
-      axios
-          .get(`${process.env.VUE_APP_API_SERVER_URL}/username-exists/?nickname=${nickname}`)
-          .then(response => (this.nicknameAvailable = response.data))
+    async checkNicknameTaken(nickname) {
+      return axios
+          .get(`${process.env.VUE_APP_API_SERVER_URL}/username-available/?nickname=${nickname}`)
+          .then(response => (this.nicknameAvailable = response.data.user_available))
           .catch(error => {
             console.log(error);
             this.error = true;
           })
-          // .finally(() => this.loading = false)
     },
-    checkSubmission() {
+    async checkSubmission() {
       Object.keys(this.form).forEach(key => {
         this.inputErrors = 0;
         let currentEnry = this.form[key]
@@ -117,8 +108,7 @@ export default {
             currentEnry.input_error = "";
           }
 
-        }
-        else{
+        } else {
           currentEnry.output = this.latestUserDetails[key]
         }
       })
@@ -131,11 +121,46 @@ export default {
         }
       }
     },
+    async postNewUser() {
+       return axios
+          .post(`${process.env.VUE_APP_API_SERVER_URL}/add-user/`, this.userDetailsParams)
+          .then(response => (this.addUserResponse = response.status))
+          .catch(error => {
+            console.log(error);
+            this.error = true;
+          })
+          .finally(() => this.loading = false)
+    },
+    async getNewUserDetailsParams() {
+      Object.keys(this.form).forEach(key => {
+        let currentEnry = this.form[key]
+        this.userDetailsParams[key] = currentEnry.output
+      });
+      let verified_email = 0;
+      if (this.user.email_verified) {
+        verified_email = 1;
+      }
+      this.userDetailsParams["email_verified"] = verified_email;
+      this.userDetailsParams["user_auth0_sub"] = this.user.sub;
+      this.userDetailsParams["email"] = this.user.email;
+      this.userDetailsParams["is_active"] = 1;
+      this.userDetailsParams["user_type_id"] = 1;
+    },
 
-    submit() {
-      this.checkSubmission();
+    async submit() {
+      await this.checkSubmission();
       if (!this.inputErrors) {
-        this.checkNicknameAvailable(this.form.nickname)
+        await this.checkNicknameTaken(this.form.nickname.output);
+        console.log("api response:")
+        console.log(this.nicknameAvailable)
+        this.showNickNameTaken = !this.nicknameAvailable;
+        if (this.nicknameAvailable) {
+          await this.getNewUserDetailsParams();
+          console.log("User details params:")
+          console.log(this.userDetailsParams);
+          await this.postNewUser();
+          console.log(this.addUserResponse);
+        }
       }
     },
   },
@@ -235,13 +260,18 @@ export default {
         <div class="column is-one-third is-centered">
           <div class="button is-primary is-centered is-mobile" @click="submit()">
             Submit
+            <div class="has-text-danger" v-if="showNickNameTaken">{{ this.nicknameError }}</div>
           </div>
         </div>
+
       </div>
     </form>
     Orig vals:
     {{ this.form }}
-    {{this.inputErrors}}
-    {{this.nicknameAvailable}}
+    {{ this.inputErrors }}
+    {{ this.nicknameAvailable }}
+    <br>
+    <br>
+    {{ this.user }}
   </div>
 </template>
