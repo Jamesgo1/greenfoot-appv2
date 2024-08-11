@@ -29,7 +29,8 @@ const routes = [
         component: () => import("@/views/CallbackPage.vue")
     },
     {
-        path: "/tree/:id",
+        path: "/treedetails/:id",
+        name: "TreeDetails",
         component: () => import("@/views/TreeShow.vue")
     },
     {

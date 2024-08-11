@@ -4,11 +4,12 @@ import TheTabularDisplay from "@/components/data-components/TheTabularDisplay.vu
 import TheMapsDisplay from "@/components/data-components/TheMapsDisplay.vue";
 import axios from "axios";
 
+
 export default {
   data() {
     return {
       info: null,
-      tableColMap: {
+      tableColMapOptions: {
         "tree_id": "Tree Number",
         "tree_species_desc": "Species",
         "tree_species_type_desc": "Species Type",
@@ -20,11 +21,19 @@ export default {
         "tree_vigour_desc": "Vigour",
         "tree_condition_desc": "Condition"
       },
+      displayCol: "tree_species_type_desc",
+      tableColMap: {
+        "tree_id": "Tree Number",
+        "tree_species_type_desc": "Species Type",
+        "tree_species_desc": "Species"
+      },
       loading: true,
       error: false,
       tableActive: true,
       tableButtonClass: "button is-primary",
-      mapButtonClass: "button is-info is-light"
+      mapButtonClass: "button is-info is-light",
+      userLat: null,
+      userLong: null
     }
   },
   mounted() {
@@ -36,7 +45,9 @@ export default {
           this.error = true;
         })
         .finally(() => this.loading = false)
+
   },
+
   methods: {
     toggleMapTableDisplay() {
       if (this.tableActive) {
@@ -47,6 +58,25 @@ export default {
         this.tableButtonClass = "button is-primary"
       }
       this.tableActive = !this.tableActive
+    },
+    locatorButtonPressed() {
+      navigator.geolocation.getCurrentPosition(
+          position => {
+            this.userLat = position.coords.latitude;
+            this.userLong = position.coords.longitude;
+            axios
+                .get(`${process.env.VUE_APP_API_SERVER_URL}/all-tree-info-by-loc?lat=${this.userLat}&long=${this.userLong}&limit=50`)
+                .then(response => (this.info = response.data))
+                .catch(error => {
+                  console.log(error);
+                  this.error = true;
+                })
+                .finally(() => this.loading = false)
+
+          },
+          error => {
+            console.log(error.message);
+          },)
     }
 
   },
@@ -66,6 +96,11 @@ export default {
   <ThePageHero title="Data Explorer" subtitle="Explore Belfast's Trees" description="Find the biggest, tallest trees. Find ones that may need help. Or help to improve
           our tree data quality."></ThePageHero>
   <div class="buttons is-centered">
+    <div class="button is-centered is-mobile has-text-success" @click="locatorButtonPressed()">
+      Get trees near you
+    </div>
+  </div>
+  <div class="buttons is-centered">
     <button @click="toggleMapTableDisplay()" :class="tableButtonClass">Table</button>
     <button @click="toggleMapTableDisplay()" :class="mapButtonClass">Map</button>
   </div>
@@ -83,7 +118,9 @@ export default {
       <TheTabularDisplay :api-info="info" :table-col-map="tableColMap"></TheTabularDisplay>
     </template>
     <template v-else>
-      <TheMapsDisplay :api-info="info" :table-col-map="tableColMap"></TheMapsDisplay>
+      <TheMapsDisplay :api-info="info" :table-col-map="tableColMap" :user-lat="userLat" :user-long="userLong">
+
+      </TheMapsDisplay>
     </template>
   </div>
 </template>

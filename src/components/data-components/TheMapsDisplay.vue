@@ -1,11 +1,14 @@
 <script>
+import {GMapMap, GMapMarker, GMapInfoWindow} from '@fawmi/vue-google-maps';
 
 export default {
+
   data() {
     return {
-      center: {lat: 54.59488, lng: -5.9266323},
+      center: {lat: this.userLat, lng: this.userLong},
       openedMarkerID: null,
-      includeColumn: false
+      includeColumn: false,
+      boundsCheck: ""
     }
   },
   computed: {
@@ -27,29 +30,69 @@ export default {
       )
       ;
       return markersArray;
+    },
+    centerPoint: function () {
+      let dynamicCentre = this.center;
+      if (!this.userLat || !this.userLong) {
+        dynamicCentre = {lat: 54.59488, lng: -5.9266323}
+        console.log(dynamicCentre)
+        console.log(typeof dynamicCentre.lat)
+      }
+      return dynamicCentre
     }
   },
   watch: {},
   methods: {
+    onMapReady() {
+      this.$refs.gmap.$mapPromise.then((googleMap) => {
+
+        // eslint-disable-next-line no-undef
+        const bounds = new google.maps.LatLngBounds();
+
+        // Extend the bounds to include each location
+        this.markersArray.forEach((marker) => {
+          let location = marker.position;
+          bounds.extend(location);
+        });
+
+        // Fit the map to the bounds
+        this.boundsCheck = bounds;
+        googleMap.fitBounds(bounds);
+      })
+    },
     openMarker(id) {
       this.openedMarkerID = id;
     },
     getColName(col) {
       return this.tableColMap[col]
     },
-    isInTableColMap(col){
+    isInTableColMap(col) {
       let includeCol = false;
-      if(col!== "position"){
+      if (col !== "position") {
         includeCol = true;
       }
       return includeCol
-    }
+    },
+    userCentre() {
+      console.log(this.userLat)
+      console.log(typeof this.userLat)
+      if (!this.userLat || !this.userLong) {
+        return {lat: 54.59488, long: -5.9266323}
+      } else {
+        return null
+      }
+    },
   },
   mounted() {
+    this.$refs.gmap.$mapPromise.then((mapObject) => {
+      // console.log(new this.google.maps.Map())
+      // console.log(bounds);
+      console.log('map is loaded now', mapObject);
+    });
   },
   name: 'HomePage',
-  props: ["apiInfo", "tableColMap"],
-  components: {}
+  props: ["apiInfo", "tableColMap", "userLat", "userLong"],
+  components: {GMapMarker, GMapMap, GMapInfoWindow}
 }
 </script>
 <!--<tr v-for="(item, id) in apiInfo" @click="selectRow(id)" :key="item.id"
@@ -60,11 +103,14 @@ export default {
           </td>
         </template>-->
 <template>
+  {{ boundsCheck }}
   <GMapMap
-      :center=center
+      ref="gmap"
+      :center="centerPoint"
       :zoom="10"
       map-type-id="terrain"
       style="width: 100vw; height: 20rem"
+      @bounds_changed="onMapReady"
       :options="{
         zoomControl: true,
         mapTypeControl: true,
@@ -98,11 +144,6 @@ export default {
     </GMapMarker>
   </GMapMap>
 
-
-  <!--  {{markersArray}}-->
 </template>
-
-
-
 
 

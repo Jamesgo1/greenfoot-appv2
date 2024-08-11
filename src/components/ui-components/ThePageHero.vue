@@ -25,10 +25,6 @@ export default {
 
     </div>
   </section>
-  <br>
-  <br>
-  <!--  <h1>{{ pageTitle }}</h1>-->
-  <!--  <h1>{{ info }}</h1>-->
 
 </template>
 

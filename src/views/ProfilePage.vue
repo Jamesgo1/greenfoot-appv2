@@ -17,10 +17,11 @@ export default {
       tcCheckBox: {"edit": false, "output": "", "input_error": ""},
       inputErrors: 0,
       nicknameAvailable: null,
-      showNickNameTaken: false,
-      nicknameError: "Sorry, your nickname is already taken, please choose a different one and submit again",
+      submissionErrors: null,
       userDetailsParams: {},
-      addUserResponse: null
+      addUserResponse: null,
+      hasSubmitted: null,
+      existingUserChangeParams: {}
     }
 
   },
@@ -37,45 +38,17 @@ export default {
   },
   watch: {},
   methods: {
-    createPostParams(user_obj) {
-
-      const postParams = {
-        "user_auth0_sub": user_obj.sub,
-        "nickname": user_obj.nickname,
-      };
-      if (user_obj.given_name) {
-        postParams["given_name"] = user_obj.given_name
-      }
-      if (user_obj.family_name) {
-        postParams["family_name"] = user_obj.family_name
-      }
-      let email_verified = 0;
-      if (user_obj.email_verified) {
-        email_verified = 1;
-      }
-      postParams["email_verified"] = email_verified;
-      return postParams;
-    },
     doDisplayName(name) {
-      const includeAsField = Object.keys(this.form).includes(name);
-
-      return includeAsField;
+      return Object.keys(this.form).includes(name);
     },
     displayNameOutput(origName) {
       return origName.replace("_", " ")
     },
     getUserGreeting() {
-      let userFirstName = this.user.given_name;
-      if (this.hasDBDetails) {
-        userFirstName = this.info.given_name;
-      }
-      if (userFirstName) {
-        return "Hi, " + userFirstName + "!"
+      if (this.user.given_name) {
+        return "Hi, " + this.user.given_name + "!"
       }
       return "Hi!"
-    },
-    addTAndCToForm() {
-      this.tcCheckBox.input_error = true;
     },
     changeToInputForm(key) {
       this.form[key]["edit"] = true;
@@ -93,10 +66,14 @@ export default {
           })
     },
     async checkSubmission() {
+      this.inputErrors = 0;
+      this.submissionErrors = [];
+      let numEditCols = 0;
+
       Object.keys(this.form).forEach(key => {
-        this.inputErrors = 0;
         let currentEnry = this.form[key]
         if (currentEnry.edit) {
+          numEditCols += 1;
           let entry_len = currentEnry.output.length;
           if (entry_len < 1) {
             currentEnry.input_error = "Value is too short: input a value of at least 2 characters";
@@ -119,10 +96,22 @@ export default {
         } else {
           this.tcCheckBox.input_error = "";
         }
+        await this.checkNicknameTaken(this.form.nickname.output);
+        if (!this.nicknameAvailable) {
+          const nicknameTakenError = "Sorry, your nickname is already taken, please choose a different one and submit again";
+          this.submissionErrors.push(nicknameTakenError);
+          this.inputErrors += 1;
+        }
+      } else {
+        if (!numEditCols) {
+          const noEditsMadeError = "No details updated - nothing to submit!"
+          this.submissionErrors.push(noEditsMadeError);
+          this.inputErrors += 1;
+        }
       }
     },
     async postNewUser() {
-       return axios
+      return axios
           .post(`${process.env.VUE_APP_API_SERVER_URL}/add-user/`, this.userDetailsParams)
           .then(response => (this.addUserResponse = response.status))
           .catch(error => {
@@ -146,24 +135,50 @@ export default {
       this.userDetailsParams["is_active"] = 1;
       this.userDetailsParams["user_type_id"] = 1;
     },
+    async getExistingUserEdits() {
+      this.existingUserChangeParams = {};
+      Object.keys(this.form).forEach(key => {
+        let currentEnry = this.form[key]
+        if (currentEnry.edit) {
+          this.existingUserChangeParams[key] = currentEnry.output;
+        }
+      })
+    },
+    async patchExistingUser() {
+      return axios
+          .patch(`${process.env.VUE_APP_API_SERVER_URL}/change-user-details/${this.user.sub}`,
+              this.existingUserChangeParams)
+          .then(response => (this.addUserResponse = response.status))
+          .catch(error => {
+            console.log(error);
+            this.error = true;
+          })
+          .finally(() => this.loading = false)
 
+    },
     async submit() {
       await this.checkSubmission();
       if (!this.inputErrors) {
-        await this.checkNicknameTaken(this.form.nickname.output);
         console.log("api response:")
         console.log(this.nicknameAvailable)
-        this.showNickNameTaken = !this.nicknameAvailable;
-        if (this.nicknameAvailable) {
+        if (this.hasDBDetails) {
+          await this.getExistingUserEdits();
+          console.log("Params to patch:")
+          console.log(this.existingUserChangeParams)
+          await this.patchExistingUser();
+        } else {
           await this.getNewUserDetailsParams();
           console.log("User details params:")
           console.log(this.userDetailsParams);
           await this.postNewUser();
           console.log(this.addUserResponse);
         }
+        this.hasSubmitted = true;
       }
+
     },
-  },
+  }
+  ,
   mounted() {
     axios
         .post(`${process.env.VUE_APP_API_SERVER_URL}/user-details/`, {"user_auth0_sub": this.user.sub})
@@ -173,11 +188,13 @@ export default {
           this.error = true;
         })
         .finally(() => this.loading = false)
-  },
-  name: 'HomePage',
-  components: {
-    ThePageHero
   }
+  ,
+  name: 'HomePage',
+  components:
+      {
+        ThePageHero
+      }
 }
 </script>
 
@@ -193,85 +210,106 @@ export default {
       again later</p>
   </div>
   <div v-else>
-    {{ this.info }}
-    {{ this.info.length }}
-    <div class="box mx-5">
-      {{ getUserGreeting() }}
-      <br>
-      <br>
-      <template v-if="hasDBDetails">
-        Here you can update your personal details, including your nickname.
+    <template v-if="!hasSubmitted">
+      <div class="box mx-5">
+        {{ getUserGreeting() }}
         <br>
         <br>
-        You have agreed to the terms and conditions of the website. You can delete your account to remove all personal
-        information below.
-      </template>
-      <template v-else>
-        Thank you for signing up to help improve Belfast tree data.
-        <br>
-        <br>
-        <b>Please note that in order to contribute information
-          on Belfast's trees you will need to agree to the website's terms and conditions below.</b>
-        <br>
-        <br>
-        You can also update your personal information below such as adding your name and changing your nickname for the
-        website.
-      </template>
-    </div>
-    <form class="box mx-5 my-5">
+        <template v-if="hasDBDetails">
+          Here you can update your personal details, including your nickname.
+          <br>
+          <br>
+          You have agreed to the terms and conditions of the website. You can delete your account to remove all personal
+          information below.
+        </template>
+        <template v-else>
+          Thank you for signing up to help improve Belfast tree data.
+          <br>
+          <br>
+          <b>Please note that in order to contribute information
+            on Belfast's trees you will need to agree to the website's terms and conditions below.</b>
+          <br>
+          <br>
+          You can also update your personal information below such as adding your name and changing your nickname for
+          the
+          website.
+        </template>
+      </div>
+      <form class="box mx-5 my-5">
 
-      <div class="columns is-mobile is-centered mx-5" v-for="(val, name, index) in latestUserDetails" :key="index">
-        <div v-if="doDisplayName(name)" class="column is-centered">
-          <div class="columns is-mobile is-centered is-capitalized">
-            <div class="column is-half-mobile has-text-centered">{{ this.displayNameOutput(name) }}: <strong>{{
-                val
-              }}</strong></div>
-            <div class="column is-half-mobile is-centered" v-if="this.form[name].edit">
-              <input class="input" v-model="this.form[name].output" placeholder="New Name"/>
-            </div>
+        <div class="columns is-mobile is-centered mx-5" v-for="(val, name, index) in latestUserDetails" :key="index">
+          <div v-if="doDisplayName(name)" class="column is-centered">
+            <div class="columns is-mobile is-centered is-capitalized">
+              <div class="column is-half-mobile has-text-centered">{{ this.displayNameOutput(name) }}: <strong>{{
+                  val
+                }}</strong></div>
+              <div class="column is-half-mobile is-centered" v-if="this.form[name].edit">
+                <input class="input" v-model="this.form[name].output" placeholder="New Name"/>
+              </div>
 
-            <div class="column is-half is-centered" v-else>
-              <div class="button is-primary is-mobile" @click="changeToInputForm(name)">
-                Edit
+              <div class="column is-half is-centered" v-else>
+                <div class="button is-primary is-mobile" @click="changeToInputForm(name)">
+                  Edit
+                </div>
               </div>
             </div>
-          </div>
-          <div v-if="this.form[name].input_error">
-            <div class="has-text-danger">{{ this.form[name].input_error }}</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="columns is-mobile is-centered">
-
-        <div class="column is-one-third is-centered" v-if="!hasDBDetails">
-          <label class="checkbox">
-            <input type="checkbox" v-model="this.tcCheckBox.output" @click="removeTCError()"/>
-            I agree to the <a href="#">terms and conditions</a>
-          </label>
-          <div v-if="this.tcCheckBox.input_error">
-            <div class="has-text-danger">{{ this.tcCheckBox.input_error }}</div>
+            <div v-if="this.form[name].input_error">
+              <div class="has-text-danger">{{ this.form[name].input_error }}</div>
+            </div>
           </div>
         </div>
 
+        <div class="columns is-mobile is-centered">
+
+          <div class="column is-one-third is-centered" v-if="!hasDBDetails">
+            <label class="checkbox">
+              <input type="checkbox" v-model="this.tcCheckBox.output" @click="removeTCError()"/>
+              I agree to the <a href="#">terms and conditions</a>
+            </label>
+            <div v-if="this.tcCheckBox.input_error">
+              <div class="has-text-danger">{{ this.tcCheckBox.input_error }}</div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="columns is-mobile is-centered">
+          <div class="column is-one-third is-centered">
+            <div class="button is-primary is-centered is-mobile" @click="submit()">
+              Submit
+            </div>
+          </div>
+        </div>
+        <div class="has-text-danger" v-for="(errorMessage, index) in submissionErrors" :key="index">
+          {{ errorMessage }}
+        </div>
+      </form>
+    </template>
+    <template v-else>
+      <div class="box mx-5">
+        <template v-if="hasDBDetails">
+          Your details have been successfully updated!
+        </template>
+        <template v-else>
+          Thank you! You are now able to edit information on trees in your local area and help to keep Belfast's trees
+          safe!
+        </template>
       </div>
 
       <div class="columns is-mobile is-centered">
         <div class="column is-one-third is-centered">
-          <div class="button is-primary is-centered is-mobile" @click="submit()">
-            Submit
-            <div class="has-text-danger" v-if="showNickNameTaken">{{ this.nicknameError }}</div>
+          <div class="button is-centered is-mobile has-text-black" @click="submit()">
+            <router-link to="/">Return Home</router-link>
           </div>
         </div>
-
+        <div class="column is-one-third is-centered">
+          <div class="button is-centered is-mobile" @click="submit()">
+            <router-link to="/explore">Explore Trees</router-link>
+          </div>
+        </div>
       </div>
-    </form>
-    Orig vals:
-    {{ this.form }}
-    {{ this.inputErrors }}
-    {{ this.nicknameAvailable }}
-    <br>
-    <br>
-    {{ this.user }}
+    </template>
   </div>
+
+
 </template>

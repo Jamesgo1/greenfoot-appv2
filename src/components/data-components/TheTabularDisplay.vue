@@ -1,5 +1,7 @@
 <script>
 
+import TreeShow from "@/views/TreeShow.vue";
+
 export default {
   data() {
     return {
@@ -9,6 +11,9 @@ export default {
   }
   ,
   computed: {
+    TreeShow() {
+      return TreeShow
+    },
     colArray: function () {
       var newColNames = [];
       for (const key of Object.keys(this.apiInfo[0])) {
@@ -17,7 +22,7 @@ export default {
         }
       }
       if (this.isAuthenticated) {
-        newColNames.push("Edit")
+        newColNames.push("Details")
       }
       return newColNames
     }
@@ -35,17 +40,24 @@ export default {
         displayEl = true;
       }
       return displayEl;
+    },
+    isTreeID(apiName) {
+      let isTreeID = false;
+      if (apiName === "tree_id") {
+        isTreeID = true;
+      }
+      return isTreeID
     }
   }
   ,
   name: 'TheTabularDisplay',
-  props: ["apiInfo", "tableColMap"],
+  props: ["apiInfo", "tableColMap", "displayCol"],
   components: {}
 }
 </script>
 
 <template>
-  <div class="table-container">
+  <div class="table-container mx-5">
     <table class="table has-text-centered is-fullwidth is-narrow is-striped mx-auto">
       <tr>
         <th class="has-text-centered" v-for="newcol in colArray" :key="newcol.id">
@@ -60,11 +72,11 @@ export default {
           </td>
         </template>
         <td v-if="isAuthenticated">
-          <router-link :to="item.tree_id.toString()">
-            Edit
-          </router-link>
-
+            <router-link :to="{name: 'TreeDetails', params:{id: item.tree_id}}">
+              View
+            </router-link>
         </td>
+
       </tr>
     </table>
   </div>
