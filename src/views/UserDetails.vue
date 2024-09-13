@@ -1,6 +1,7 @@
 <script>
 import ThePageHero from "@/components/ui-components/ThePageHero.vue";
 import axios from "axios";
+import CryptoJS from "crypto-js";
 
 export default {
   data() {
@@ -58,7 +59,7 @@ export default {
     },
     async checkNicknameTaken(nickname) {
       return axios
-          .get(`${process.env.VUE_APP_API_SERVER_URL}/username-available/?nickname=${nickname}`)
+          .get(`${process.env.VUE_APP_API_SERVER_URL}/user/username-available/?nickname=${nickname}`)
           .then(response => (this.nicknameAvailable = response.data.user_available))
           .catch(error => {
             console.log(error);
@@ -112,7 +113,7 @@ export default {
     },
     async postNewUser() {
       return axios
-          .post(`${process.env.VUE_APP_API_SERVER_URL}/add-user/`, this.userDetailsParams)
+          .post(`${process.env.VUE_APP_API_SERVER_URL}/user/add-user/`, this.userDetailsParams)
           .then(response => (this.addUserResponse = response.status))
           .catch(error => {
             console.log(error);
@@ -120,6 +121,28 @@ export default {
           })
           .finally(() => this.loading = false)
     },
+    async encryptPII(stringToEncrypt) {
+      const iv = CryptoJS.lib.WordArray.random(16);
+      const encrypted = CryptoJS.AES.encrypt(stringToEncrypt, CryptoJS.enc.Utf8.parse(process.env.VUE_APP_ENCRYPT_KEY), {
+        iv: iv,
+        mode: CryptoJS.mode.CTR,
+        padding: CryptoJS.pad.Pkcs7
+      });
+      return iv.toString() + ':' + encrypted.toString();
+
+    },
+    async decryptPII(objectToDecrypt) {
+      const textParts = objectToDecrypt.split(':');
+      const iv = CryptoJS.enc.Hex.parse(textParts.shift());
+      const encryptedText = textParts.join(':');
+      const decrypted = CryptoJS.AES.decrypt(encryptedText, CryptoJS.enc.Utf8.parse(process.env.VUE_APP_ENCRYPT_KEY), {
+        iv: iv,
+        mode: CryptoJS.mode.CTR,
+        padding: CryptoJS.pad.Pkcs7
+      });
+      return decrypted.toString(CryptoJS.enc.Utf8);
+    },
+
     async getNewUserDetailsParams() {
       Object.keys(this.form).forEach(key => {
         let currentEnry = this.form[key]
@@ -131,7 +154,7 @@ export default {
       }
       this.userDetailsParams["email_verified"] = verified_email;
       this.userDetailsParams["user_auth0_sub"] = this.user.sub;
-      this.userDetailsParams["email"] = this.user.email;
+      this.userDetailsParams["email"] = await this.encryptPII(this.user.email);
       this.userDetailsParams["is_active"] = 1;
       this.userDetailsParams["user_type_id"] = 1;
     },
@@ -146,7 +169,7 @@ export default {
     },
     async patchExistingUser() {
       return axios
-          .patch(`${process.env.VUE_APP_API_SERVER_URL}/change-user-details/${this.user.sub}`,
+          .patch(`${process.env.VUE_APP_API_SERVER_URL}/user/change-user-details/${this.user.sub}`,
               this.existingUserChangeParams)
           .then(response => (this.addUserResponse = response.status))
           .catch(error => {
@@ -172,6 +195,7 @@ export default {
           console.log(this.userDetailsParams);
           await this.postNewUser();
           console.log(this.addUserResponse);
+          this.$store.dispatch("addSessionData", {"user_type_id": this.userDetailsParams["user_type_id"]})
         }
         this.hasSubmitted = true;
       }
@@ -181,7 +205,7 @@ export default {
   ,
   mounted() {
     axios
-        .post(`${process.env.VUE_APP_API_SERVER_URL}/user-details/`, {"user_auth0_sub": this.user.sub})
+        .post(`${process.env.VUE_APP_API_SERVER_URL}/user/user-details/`, {"user_auth0_sub": this.user.sub})
         .then(response => (this.info = response.data))
         .catch(error => {
           console.log(error);
@@ -219,8 +243,7 @@ export default {
           Here you can update your personal details, including your nickname.
           <br>
           <br>
-          You have agreed to the terms and conditions of the website. You can delete your account to remove all personal
-          information below.
+          You have agreed to the terms and conditions of the website.
         </template>
         <template v-else>
           Thank you for signing up to help improve Belfast tree data.

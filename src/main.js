@@ -1,9 +1,9 @@
 import {createAuth0} from "@auth0/auth0-vue";
 import VueGoogleMaps from '@fawmi/vue-google-maps'
-// import VueSession from "vue-session/index.esm";
 import {createApp} from 'vue'
 import App from '@/App.vue'
 import router from '@/router'
+import store from "@/store";
 
 
 
@@ -20,9 +20,11 @@ app.use(router)
     )
     .use(VueGoogleMaps, {
         load: {
-            key: process.env.VUE_APP_MAPS_API
+            key: process.env.VUE_APP_MAPS_API,
+            libraries: "visualization"
         }
         }
 
     )
+    .use(store)
     .mount("#app")

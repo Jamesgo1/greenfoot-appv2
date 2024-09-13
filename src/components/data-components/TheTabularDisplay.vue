@@ -1,24 +1,24 @@
 <script>
-
-import TreeShow from "@/views/TreeShow.vue";
+import svgTrees from "@/assets/svg_tree";
 
 export default {
   data() {
     return {
       selectedRow: null,
-      isAuthenticated: this.$auth0.isAuthenticated
+      isAuthenticated: this.$auth0.isAuthenticated,
+      svgTrees: svgTrees,
+      currentImage: null
     }
   }
   ,
   computed: {
-    TreeShow() {
-      return TreeShow
-    },
     colArray: function () {
       var newColNames = [];
       for (const key of Object.keys(this.apiInfo[0])) {
         if (key in this.tableColMap) {
-          newColNames.push(this.tableColMap[key])
+          if (this.doAddColumn(key)) {
+            newColNames.push(this.tableColMap[key])
+          }
         }
       }
       if (this.isAuthenticated) {
@@ -34,24 +34,42 @@ export default {
     selectRow(row) {
       this.selectedRow = row;
     },
+    doAddColumn(col) {
+      let addCol = true;
+      if (col === "tree_id" && this.userLat) {
+        addCol = false
+      } else if (col === "tree_number" && !this.userLat) {
+        addCol = false
+      }
+      return addCol
+    },
     doDisplayElement(valKey) {
       let displayEl = false;
       if (Object.keys(this.tableColMap).includes(valKey)) {
-        displayEl = true;
+        displayEl = !(this.userLat && valKey === "tree_id");
+
       }
       return displayEl;
     },
-    isTreeID(apiName) {
-      let isTreeID = false;
-      if (apiName === "tree_id") {
-        isTreeID = true;
+    treeHasImage(item) {
+      return "image_paths" in item && item.image_paths;
+    },
+    getTreeImagePath(item) {
+      const imageStr = item.image_paths;
+      const imageDir = imageStr.split(";")[0]
+      return `${process.env.VUE_APP_API_SERVER_URL}/${imageDir}`
+    },
+    getSVGTreeType(speciesName) {
+      let svg = this.svgTrees[speciesName];
+      if (!svg) {
+        svg = this.svgTrees.basic_tree;
       }
-      return isTreeID
+      return svg;
     }
   }
   ,
   name: 'TheTabularDisplay',
-  props: ["apiInfo", "tableColMap", "displayCol"],
+  props: ["apiInfo", "tableColMap", "displayCol", "userLat"],
   components: {}
 }
 </script>
@@ -71,10 +89,16 @@ export default {
             {{ val }}
           </td>
         </template>
-        <td v-if="isAuthenticated">
-            <router-link :to="{name: 'TreeDetails', params:{id: item.tree_id}}">
-              View
-            </router-link>
+        <td>
+          <router-link :to="{name: 'TreeDetails', params:{id: item.tree_id}}">
+            <template v-if="treeHasImage(item)">
+              <img :src="getTreeImagePath(item)" alt="Tree Image"/>
+
+            </template>
+            <template v-else>
+              <span v-html="getSVGTreeType(item.tree_species_type_desc)"></span>
+            </template>
+          </router-link>
         </td>
 
       </tr>

@@ -24,8 +24,15 @@ export default {
       displayCol: "tree_species_type_desc",
       tableColMap: {
         "tree_id": "Tree Number",
+        "tree_distance": "Tree Distance (km)",
         "tree_species_type_desc": "Species Type",
         "tree_species_desc": "Species"
+      },
+      quantOptions: {
+        "diameter_cm": "Diameter (cm)",
+        "spread_radius_m": "Spread Radius (m)",
+        "tree_height_m": "Height (m)",
+        "tree_data_quality_id": "Data Quality"
       },
       loading: true,
       error: false,
@@ -33,21 +40,46 @@ export default {
       tableButtonClass: "button is-primary",
       mapButtonClass: "button is-info is-light",
       userLat: null,
-      userLong: null
+      userLong: null,
+      navAllowed: false
     }
   },
   mounted() {
-    axios
-        .get(`${process.env.VUE_APP_API_SERVER_URL}/all-tree-info/?limit=50`)
-        .then(response => (this.info = response.data))
-        .catch(error => {
-          console.log(error);
-          this.error = true;
-        })
-        .finally(() => this.loading = false)
+    navigator.geolocation.getCurrentPosition(
+        position => {
+          this.userLat = position.coords.latitude;
+          this.userLong = position.coords.longitude;
+          console.log(this.userLat, this.userLong)
+        },
+        error => {
+          console.log(error.message);
+        },)
+    if (!this.userLat || !this.userLong) {
 
+      axios
+          .get(`${process.env.VUE_APP_API_SERVER_URL}/tree/all-tree-info/?limit=50`)
+          .then(response => (this.info = response.data))
+          .catch(error => {
+            console.log(error);
+            this.error = true;
+          })
+          .finally(() => this.loading = false)
+    }
   },
-
+  watch: {
+    userLat(newValue) {
+      if (newValue) {
+        axios
+            .get(`${process.env.VUE_APP_API_SERVER_URL}/tree/all-tree-info-by-loc?lat=${this.userLat}&long=${this.userLong}&limit=50`)
+            .then(response => (this.info = response.data))
+            .catch(error => {
+              console.log(error);
+              this.error = true;
+            })
+            .finally(() => this.loading = false)
+      }
+    }
+  },
   methods: {
     toggleMapTableDisplay() {
       if (this.tableActive) {
@@ -59,26 +91,6 @@ export default {
       }
       this.tableActive = !this.tableActive
     },
-    locatorButtonPressed() {
-      navigator.geolocation.getCurrentPosition(
-          position => {
-            this.userLat = position.coords.latitude;
-            this.userLong = position.coords.longitude;
-            axios
-                .get(`${process.env.VUE_APP_API_SERVER_URL}/all-tree-info-by-loc?lat=${this.userLat}&long=${this.userLong}&limit=50`)
-                .then(response => (this.info = response.data))
-                .catch(error => {
-                  console.log(error);
-                  this.error = true;
-                })
-                .finally(() => this.loading = false)
-
-          },
-          error => {
-            console.log(error.message);
-          },)
-    }
-
   },
   name: 'DataTable',
   props: {
@@ -95,12 +107,7 @@ export default {
 <template>
   <ThePageHero title="Data Explorer" subtitle="Explore Belfast's Trees" description="Find the biggest, tallest trees. Find ones that may need help. Or help to improve
           our tree data quality."></ThePageHero>
-  <div class="buttons is-centered">
-    <div class="button is-centered is-mobile has-text-success" @click="locatorButtonPressed()">
-      Get trees near you
-    </div>
-  </div>
-  <div class="buttons is-centered">
+  <div class="buttons is-centered mt-4">
     <button @click="toggleMapTableDisplay()" :class="tableButtonClass">Table</button>
     <button @click="toggleMapTableDisplay()" :class="mapButtonClass">Map</button>
   </div>
@@ -115,10 +122,10 @@ export default {
 
   <div class="table-container" v-else>
     <template v-if="tableActive">
-      <TheTabularDisplay :api-info="info" :table-col-map="tableColMap"></TheTabularDisplay>
+      <TheTabularDisplay :api-info="info" :table-col-map="tableColMap" :user-lat="userLat"></TheTabularDisplay>
     </template>
     <template v-else>
-      <TheMapsDisplay :api-info="info" :table-col-map="tableColMap" :user-lat="userLat" :user-long="userLong">
+      <TheMapsDisplay :api-info="info" :table-col-map="tableColMap" :user-lat="userLat" :user-long="userLong" :heat-map-options="quantOptions">
 
       </TheMapsDisplay>
     </template>

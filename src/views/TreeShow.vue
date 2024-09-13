@@ -25,7 +25,9 @@ export default {
         "nickname": "Changed By"
       },
       editMode: false,
-      treeInfo: {}
+      treeInfo: {},
+      imageInfo: null,
+      invalidEdit: false
     }
 
   },
@@ -33,13 +35,9 @@ export default {
     treeID() {
       return parseInt(this.$route.params.id)
     },
-    editButton() {
-      let buttonName = "Edit";
-      if (this.editMode) {
-        buttonName = "View";
-      }
-      return buttonName;
-    },
+    isAuthenticated() {
+      return this.$auth0.isAuthenticated;
+    }
 
   },
   watch: {},
@@ -48,19 +46,44 @@ export default {
       return "Tree " + route;
     },
     updateEditMode() {
-      this.editMode = !this.editMode
-      this.colEdits = {}
+      if (!this.editMode && this.$store.getters.getSession.user_type_id < 1) {
+        this.invalidEdit = true;
+      } else {
+        this.editMode = !this.editMode
+      }
+      console.log("Edit invalid is: " + this.invalidEdit)
     },
+
+    async getTreeImages() {
+      return axios
+          .get(`${process.env.VUE_APP_API_SERVER_URL}/tree/approved-images/${this.$route.params.id}?limit=10`)
+          .then(response => (this.imageInfo = response.data))
+          .catch(error => {
+            console.log(error);
+            this.error = true;
+          })
+          .finally(() => this.loading = false)
+    },
+    async getTreeHist() {
+      return axios
+          .get(`${process.env.VUE_APP_API_SERVER_URL}/tree/all-tree-info-hist/?limit=50&tree_id=${this.$route.params.id}`)
+          .then(response => (this.treeInfo = response.data))
+          .catch(error => {
+            console.log(error);
+            this.error = true;
+          })
+          .finally(() => this.loading = false)
+    },
+
+    async runAPICalls() {
+      await this.getTreeHist();
+      await this.getTreeImages();
+      console.log("This is the image data object:")
+      console.log(this.imageInfo)
+    }
   },
-  mounted() {
-    axios
-        .get(`${process.env.VUE_APP_API_SERVER_URL}/all-tree-info-hist/?limit=50&tree_id=${this.$route.params.id}`)
-        .then(response => (this.treeInfo = response.data))
-        .catch(error => {
-          console.log(error);
-          this.error = true;
-        })
-        .finally(() => this.loading = false)
+  async mounted() {
+    await this.runAPICalls();
   },
   name: 'TreeInfo',
   components: {
@@ -100,17 +123,41 @@ export default {
   <div class="container" v-else>
 
 
-    <template v-if="!editMode">
+    <template v-if="!editMode && !invalidEdit">
       <TheTreeViewDisplay
           :tree-info="treeInfo"
           :col-options="colOptions"
+          :image-info="imageInfo"
           @changeToEdit="updateEditMode"></TheTreeViewDisplay>
     </template>
+    <template v-else-if="invalidEdit">
+      <div class="container">
+        <div class="box mx-5 mb-3 has-text-centered">
+          <div v-if="isAuthenticated" class="content has-text-success has-text-centered is-size-5">You are unable to edit data as
+            you
+            have
+            not signed the site's terms and conditions. Please approve it
+            <router-link to="/profile"> on your profile
+            </router-link>
+            if you wish to contribute.
 
+          </div>
+          <div v-else class="content has-text-success has-text-centered is-size-5">You are not logged in and so are unable to edit
+            data. Please either create an account or log in.
+            Once you have you are in your account, please sign the terms and conditions on your profile page to start
+            editing</div>
+          <div class="content has-text-success has-text-centered is-size-5">
+            Thank you for your interest in contributing to the community!
+          </div>
+        </div>
+      </div>
+
+    </template>
     <template v-else>
       <TheTreeEditDisplay
           :tree-info="treeInfo"
           :col-options="colOptions"
+          :image-info="imageInfo"
           @changeToView="updateEditMode">
       </TheTreeEditDisplay>
     </template>
@@ -118,14 +165,4 @@ export default {
   </div>
 </template>
 
-<style scoped>
-.dropdown-content {
-  max-height: 15em;
-  overflow: auto;
-}
-
-.table {
-  overflow-x: auto;
-}
-</style>
 

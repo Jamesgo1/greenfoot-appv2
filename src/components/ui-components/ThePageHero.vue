@@ -1,8 +1,6 @@
 <script>
 
 export default {
-  data() {
-  },
   computed: {
   },
   watch: {},

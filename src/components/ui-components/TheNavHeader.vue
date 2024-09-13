@@ -1,33 +1,78 @@
 <script>
 
+import axios from "axios";
+
 export default {
   data() {
     return {
       isAuthenticated: this.$auth0.isAuthenticated,
       navBurgerActive: false,
       navBurgerClass: "navbar-burger",
-      navMenuClass: "navbar-menu"
+      navMenuClass: "navbar-menu",
+      user: this.$auth0.user,
+      userDetails: [],
+      showAdmin: false,
+      notificationDropdown: "dropdown",
+      notificationData: null,
+      newNotiDate: null,
+      iconColors: {
+        success: "color: hsl(141, 71%, 48%)",
+        danger: "color: hsl(348, 100%, 61%)"
+      },
+      iconType: {
+        "image": "fas fa-image",
+        "edit": "fas fa-marker",
+        "new tree": "fas fa-tree",
+        "deletion": "fas fa-trash"
+      },
+      currentNotiDetails: null,
     }
   },
   computed: {
     currentRouteName() {
       return this.$route.name;
+    },
+    getSession() {
+      return this.$store.getters.getSession;
+    },
+    notificationCount() {
+      let notiCount = 0;
+      console.log("Notification data in computed:")
+      console.log(this.notificationData)
+      if (this.notificationData) {
+        for (let notiObj of this.notificationData) {
+          if (!notiObj.noti_clicked_ind) {
+            notiCount++;
+          }
+        }
+      }
+      console.log(notiCount)
+      notiCount = notiCount === 0 ? null : notiCount
+      console.log(notiCount);
+      return notiCount;
+    },
+    notificationIconColor() {
+      let notiColor = "color: hsl(0, 0%, 71%)"
+      if (this.notificationCount > 0) {
+        notiColor = "color: hsl(141, 71%, 48%)"
+      }
+      return notiColor;
     }
   },
-  watch: {},
+  watch: {
+  },
   methods: {
-
     handleLogin() {
       this.$auth0.loginWithRedirect({
         appState: {
-          target: "/",
+          target: "/profile",
         },
       });
     },
     handleSignUp() {
       this.$auth0.loginWithRedirect({
         appState: {
-          target: "/",
+          target: "/profile",
         },
         authorizationParams: {
           screen_hint: "signup",
@@ -40,6 +85,32 @@ export default {
           returnTo: window.location.origin,
         },
       });
+      console.log("Ending session")
+      this.$store.dispatch("endSession");
+      console.log("Here's the session after logout: " + this.getSession)
+    },
+
+    async startSession() {
+      let sessionUserTypeID = 0;
+      if (!this.getSession || (!this.getSession.user_type_id && this.getSession.user_type_id !== 0)) {
+        this.$store.dispatch("startSession", {"session": true})
+        if (this.isAuthenticated) {
+          console.log("Calling user details API")
+          await this.getUserDetails();
+          if (this.userDetails.length > 0) {
+            sessionUserTypeID = this.userDetails[0].user_type_id;
+          } else {
+            sessionUserTypeID = 0;
+          }
+        } else {
+          sessionUserTypeID = 0
+        }
+        this.$store.dispatch("addSessionData", {"user_type_id": sessionUserTypeID})
+        console.log("Created session")
+      } else {
+        console.log("Session already started:")
+        console.log(this.getSession)
+      }
     },
     getNavClass(routeName) {
       let navClass = "navbar-item"
@@ -57,21 +128,123 @@ export default {
         this.navMenuClass = this.navMenuClass + " is-active"
       }
       this.navBurgerActive = !this.navBurgerActive;
+    },
+    async getUserDetails() {
+      return axios
+          .post(`${process.env.VUE_APP_API_SERVER_URL}/user/user-details/`, {"user_auth0_sub": this.user.sub})
+          .then(response => (this.userDetails = response.data))
+          .catch(error => {
+            console.log(error);
+            this.error = true;
+          })
+          .finally(() => this.loading = false)
+    },
+    async getUserTypeFromSession() {
+      if (!this.getSession) {
+        await this.startSession();
+      }
+      return this.getSession.user_type_id;
+    },
+    async isAdmin() {
+      console.log("Checking user type...")
+      let admin = false;
+      let sessionUserTypeID = await this.getUserTypeFromSession();
+      console.log("The session user type is " + sessionUserTypeID)
+      if (sessionUserTypeID > 1) {
+        admin = true;
+      }
+      this.showAdmin = admin;
+
+    },
+    async getUserNotifications() {
+      if (this.userDetails.length > 0) {
+        const userID = this.userDetails[0].user_id
+        console.log("User ID is: " + userID)
+        return axios
+            .get(`${process.env.VUE_APP_API_SERVER_URL}/user/notif-changes/?user_id=${userID}&limit=5`)
+            .then(response => (this.notificationData = response.data))
+            .catch(error => {
+              console.log(error);
+              this.error = true;
+            })
+            .finally(() => this.loading = false)
+      } else {
+        return []
+      }
+    },
+    async updateNotificationDate() {
+      if (this.userDetails.length > 0) {
+        const userID = this.userDetails[0].user_id
+        return axios
+            .patch(`${process.env.VUE_APP_API_SERVER_URL}/user/update-notification-date/?user_id=${userID}`)
+            .then(response => (this.newNotiDate = response.status))
+            .catch(error => {
+              console.log(error);
+              this.error = true;
+            })
+            .finally(() => this.loading = false)
+      } else {
+        return null;
+      }
+    },
+    async switchNotificationDD() {
+      if (this.notificationDropdown === "dropdown") {
+        await this.updateNotificationDate();
+        await this.getUserNotifications();
+        this.notificationDropdown = "dropdown is-active"
+      } else {
+        this.notificationDropdown = "dropdown"
+      }
+      console.log("Notification is now: " + this.notificationDropdown)
     }
+    ,
+    getUserFriendlyDate(date) {
+      const dateObj = new Date(date)
+      return dateObj.toLocaleString("en-GB", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+    },
+    getNotificationText(notifObj) {
+      let acceptanceDesc = "declined";
+      if (notifObj.change_ind > 0) {
+        acceptanceDesc = "approved"
+      }
+      return `${this.getUserFriendlyDate(notifObj.comb_date)}: Your ${notifObj.change_type} request for tree ${notifObj.tree_id} was ${acceptanceDesc}`
+    },
+    getNotificationColor(notifObject) {
+      return notifObject.change_ind > 0 ? this.iconColors.success : this.iconColors.danger
+    },
+    getNotificationType(notifObject) {
+      return this.iconType[notifObject.change_type]
+    },
+  }
+  ,
+  async mounted() {
+    await this.startSession();
+    await this.isAdmin();
+    console.log("Here is the user details:")
+    console.log(this.userDetails)
+    await this.getUserNotifications();
+    console.log("Here is the notification API response: ")
+    console.log(this.notificationData)
+    this.interval = setInterval(this.getUserNotifications, 30000)
   },
-  mounted() {
+  beforeUnmount() {
+    this.$store.dispatch("endSession");
+    clearInterval(this.interval);
   },
   name: 'NavHeader',
 }
 </script>
 
 <template>
-  <nav class="navbar" role="navigation" aria-label="main navigation">
+  <nav class="navbar is-vcentered" role="navigation" aria-label="main navigation">
     <div class="navbar-brand">
       <router-link class="navbar-item" to="/">
         <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="59px" height="59px"
              viewBox="0 0 59 59" version="1.1">
-          <!-- Generator: Sketch 43.2 (39069) - http://www.bohemiancoding.com/sketch -->
           <title>Tree</title>
           <desc>Created with Sketch.</desc>
           <defs/>
@@ -100,6 +273,36 @@ export default {
           </g>
         </svg>
       </router-link>
+      <div class="navbar-item" v-if="getSession && getSession.user_type_id > 0">
+        <div :class="notificationDropdown">
+          <div class="dropdown-trigger" @click="switchNotificationDD()">
+            <div class="notification-icon" :style="notificationIconColor">
+          <span class="icon has-badge"
+                style="width: 39px;
+                height: 45px;
+                font-size: 25px;">
+          <i class="fas fa-bell"><span class="content is-size-6">&nbsp;{{ this.notificationCount }}</span></i>
+        </span>
+            </div>
+            <div class="dropdown-menu" id="dropdown-menu" role="menu">
+              <div class="dropdown-content" v-for="(notifObject, index) in notificationData" :key="index">
+
+                <router-link to="/profile" class="has-text-black">
+                  <div class="box">
+                    <div class="content">
+                  <span class="icon is-small">
+                    <i :class="getNotificationType(notifObject)" :style="getNotificationColor(notifObject)"></i>
+                  </span>
+                      &nbsp;&nbsp;{{ this.getNotificationText(notifObject) }}
+                    </div>
+                  </div>
+                </router-link>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
       <a role="button" aria-label="menu" aria-expanded="false" data-target="navbarBasicExample"
          @click="toggleNavBurgerActivity" :class="navBurgerClass">
         <span aria-hidden="true"></span>
@@ -116,7 +319,25 @@ export default {
         <router-link @click="toggleNavBurgerActivity" :class="getNavClass('Explore')" to="/explore">Explore
         </router-link>
         <template v-if="isAuthenticated">
-          <router-link @click="toggleNavBurgerActivity" :class="getNavClass('Profile')" to="/profile">Profile
+          <router-link @click="toggleNavBurgerActivity" :class="getNavClass('UserDetails')" to="/details">Details
+          </router-link>
+        </template>
+        <template v-if="isAuthenticated">
+          <router-link @click="toggleNavBurgerActivity" :class="getNavClass('ProfileDetails')" to="/profile">Profile
+          </router-link>
+        </template>
+        <template v-if="isAuthenticated && getSession && getSession.user_type_id > 0">
+          <router-link @click="toggleNavBurgerActivity" :class="getNavClass('NewTree')" to="/new-tree">Add Tree
+          </router-link>
+        </template>
+        <router-link @click="toggleNavBurgerActivity" :class="getNavClass('Analytics')" to="/analytics"
+        >Analytics
+        </router-link>
+        <template v-if="showAdmin">
+          <router-link @click="toggleNavBurgerActivity"
+                       :class="getNavClass('TreeDetailsSubmissions')"
+                       to="/submissions">
+            Tree Submissions
           </router-link>
         </template>
         <div class="navbar-item has-dropdown is-hoverable">
@@ -126,9 +347,6 @@ export default {
 
           <div class="navbar-dropdown">
             <router-link @click="toggleNavBurgerActivity" :class="getNavClass('About')" to="/about">About</router-link>
-            <a class="navbar-item">
-              Jobs
-            </a>
             <a class="navbar-item">
               Contact
             </a>
@@ -162,5 +380,11 @@ export default {
 
 </template>
 
+<style>
+.icon {
+  /* This sets the size of the Font Awesome icon */
+  //color: hsl(140, 4%, 84%)
+}
 
+</style>
 
